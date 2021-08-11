@@ -1,3 +1,4 @@
+# Aidan Bird 2021
 CC=gcc
 CFLAGS = -ggdb3 -O0 -Wall -fstrict-aliasing -std=c99
 

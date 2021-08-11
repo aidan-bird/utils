@@ -1,3 +1,11 @@
+/*
+ * Aidan Bird 2021
+ * a1birdATryersonDOTca
+ *
+ * COLUMNIZER
+ * Formats strings into columns.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
