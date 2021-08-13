@@ -25,13 +25,28 @@
     exit(1); \
 }
 
+#define TRY_GET_CHAR(SRC_PTR, DEST_PTR) \
+if (isStrAChar(args)) { \
+    *(DEST_PTR) = *(SRC_PTR); \
+} else { \
+    EXPECTED_CHAR_ERROR; \
+}
+
+typedef enum ArgsLoopState ArgsLoopState;
+
+enum ArgsLoopState
+{
+    START,
+    ROW_SEPARATOR,
+    COL_SEPARATOR,
+    DELIMITER,
+};
+
 int isStrAChar(const char *str);
-int isStrAEscChar(const char *str);
-int parseEscaped(const char *esc);
 void printErrorMsg(const char *fmt, ...);
 size_t sumStrLen(size_t n, const char **strs);
 size_t parseRow(char *restrict buf, char *col, char **nextcol, char delim);
-int printCol(size_t n, char **strs, char rowSeperator, char colSeperator,
+int printCol(size_t n, char **strs, char rowSeparator, char colSeparator,
     char delim);
 
 static const char *usage = 
@@ -41,10 +56,14 @@ static const char *usage =
 "\n"
 "OPTIONS\n"
 "  -h               Prints this help message.\n"
-"  --               Indicates that there are no more option arguments after --.\n"
+"  --               Indicates that there are no more \n"
+"                   option arguments after --.\n"
 "  -d [CHARACTER]   Sets the input delimiter character. Space is default.\n"
-"  -r [CHARACTER]   Sets the output row separator character. Newline is default.\n"
-"  -c [CHARACTER]   Sets the output column separator character. Space is default.\n"
+"                   The delimiter cannot be NULL (zero).\n"
+"  -r [CHARACTER]   Sets the output row separator character.\n"
+"                   Newline is default.\n"
+"  -c [CHARACTER]   Sets the output column separator character.\n"
+"                   Space is default.\n"
 "\n"
 "EXAMPLE\n"
 "columnizer -d \" \" -r \"\\n\" -c \" \" -- \"a b c\" \"1 2 3\"\n"
@@ -71,6 +90,10 @@ printErrorMsg(const char *fmt, ...)
     va_list args;
 
     va_start (args, fmt);
+    /*
+     * if the message is too large, it will be truncated and ... will be
+     * appended to it
+     */
     if (vsnprintf(buffer, ERROR_MSG_BUF_SIZE, fmt, args) 
         > ERROR_MSG_BUF_SIZE) {
         buffer[ERROR_MSG_BUF_SIZE - 2] = '.';  
@@ -97,63 +120,6 @@ int
 isStrAChar(const char *str)
 {
     return str && str[0] && !str[1];
-}
-
-int
-isStrAEscChar(const char *str)
-{
-    return str && str[0] == '\\' && str[1] && !str[2];
-}
-
-int
-tryParseChar(const char *str, char *out)
-{
-    if (isStrAEscChar(str)) {
-        *out = parseEscaped(str + 1);
-        return 0;
-    } else if (isStrAChar(str)) {
-        *out = *str;
-        return 0;
-    }
-    return 1;
-}
-
-int
-parseEscaped(const char *esc)
-{
-    if (!esc)
-        return 0;
-    if (isStrAChar(esc)) {
-        switch (*esc) {
-            case 'a':
-                return '\a';
-            case 'b':
-                return '\b';
-            case 'e':
-                return '\e';
-            case 'f':
-                return '\f';
-            case 'n':
-                return '\n';
-            case 'r':
-                return '\r';
-            case 't':
-                return '\t';
-            case 'v':
-                return '\v';
-            case '\\':
-                return '\\';
-            case '\'':
-                return '\'';
-            case '"':
-                return '"';
-            case '?':
-                return '?';
-            default:
-                return *esc;
-        }
-    }
-    return 0;
 }
 
 /*
@@ -194,7 +160,6 @@ size_t
 parseRow(char *restrict buf, char *col, char **nextcol, char delim)
 {
     size_t ret;
-    /* XXX change this to LF */
     char *start;
     char isModCol;
 
@@ -234,7 +199,8 @@ parseRow(char *restrict buf, char *col, char **nextcol, char delim)
  * returns non-zero on error.
  */
 int
-printCol(size_t n, char **strs, char rowSeperator, char colSeperator, char delim)
+printCol(size_t n, char **strs, char rowSeparator, char colSeparator,
+    char delim)
 {
     int j;
     char *buf;
@@ -253,7 +219,7 @@ printCol(size_t n, char **strs, char rowSeperator, char colSeperator, char delim
         j = 0;
         for (int i = 0; i < n; i++) {
             if (j > 0) {
-                buf[nCopied] = colSeperator;
+                buf[nCopied] = colSeparator;
                 nCopied++;
             }
             lastReadSize = parseRow(buf + nCopied, strs[i], strs + i, delim);
@@ -264,59 +230,65 @@ printCol(size_t n, char **strs, char rowSeperator, char colSeperator, char delim
         }
         if (!j)
             break;
-        buf[nCopied] = rowSeperator;
+        buf[nCopied] = rowSeparator;
         nCopied++;
         fwrite(buf, 1, nCopied, stdout);
     }
     free(buf);
     return 0;
-// error2:;
-//     free(buf);
 error1:;
-    return -1;
+    printErrorMsg("%s", "malloc failed.");
+    return 1;
 }
 
 int
 main(int argc, char **argv)
 {
     int i;
-    char rowSeperator;
-    char colSeperator;
+    char rowSeparator;
+    char colSeparator;
     char delim;
-    int argParseState;
     char *args;
+    ArgsLoopState argParseState;
 
-    /* parse args */
     if (argc <= 1) {
         fputs(usage, stderr);
         exit(1);
     }
-    rowSeperator = '\n';
-    colSeperator = ' ';
+    /* set defaults */
+    rowSeparator = '\n';
+    colSeparator = ' ';
     delim = ' ';
-    argParseState = 0;
+    /* parse arguments */
+    argParseState = START;
     for (i = 1; i < argc; i++) {
         args = argv[i];
         switch (argParseState) {
-            case 0:
+            case START:
                 if (args[0] != '-') {
+                    /* no more option arguments */
                     goto noMoreArgs;
                 } else {
                     switch(args[1]) {
                         case 'r':
-                            argParseState = 1;
+                            /* set row separator  */
+                            argParseState = ROW_SEPARATOR;
                             break;
                         case 'c':
-                            argParseState = 2;
+                            /* set column separator  */
+                            argParseState = COL_SEPARATOR;
                             break;
                         case 'd':
-                            argParseState = 3;
+                            /* set delimiter  */
+                            argParseState = DELIMITER;
                             break;
                         case 'h':
+                            /* print usage */
                             puts(usage);
                             exit(0);
                             break;
                         case '-':
+                            /* end option arguments */
                             if (args[2]) {
                                 ARGS_ERROR;
                             } else {
@@ -330,25 +302,31 @@ main(int argc, char **argv)
                         ARGS_ERROR;
                 }
                 break;
-            case 1:
-                if (tryParseChar(args, &rowSeperator))
-                    EXPECTED_CHAR_ERROR;
+            /* get option arguments */
+            case ROW_SEPARATOR:
+                TRY_GET_CHAR(&rowSeparator, args);
                 break;
-            case 2:
-                if (tryParseChar(args, &colSeperator))
-                    EXPECTED_CHAR_ERROR;
+            case COL_SEPARATOR:
+                TRY_GET_CHAR(&colSeparator, args);
                 break;
-            case 3:
-                if (tryParseChar(args, &delim))
-                    EXPECTED_CHAR_ERROR;
+            case DELIMITER:
+                TRY_GET_CHAR(&delim, args);
+                if (!delim) {
+                    printErrorMsg("The delimiter cannot be NULL!\n", NULL);
+                    exit(1);
+                }
                 break;
         }
-        if (!(i & 1) && argParseState != 0)
-            argParseState = 0;
+        /* 
+         * options occure at even indicies.
+         * option arguments occure at odd indicies.
+         * use these facts to reset the parser state to START when needed
+         */
+        if (!(i & 1) && argParseState != START)
+            argParseState = START;
     }
 noMoreArgs:;
     if (i == argc)
         printErrorMsg("Only options were submitted!\n", NULL);
-    printCol(argc - i, argv + i, rowSeperator, colSeperator, delim);
-    return 0;
+    return printCol(argc - i, argv + i, rowSeparator, colSeparator, delim);
 }
