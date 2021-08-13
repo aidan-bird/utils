@@ -25,7 +25,7 @@
     exit(1); \
 }
 
-#define TRY_GET_CHAR(SRC_PTR, DEST_PTR) \
+#define TRY_GET_CHAR(DEST_PTR, SRC_PTR) \
 if (isStrAChar(args)) { \
     *(DEST_PTR) = *(SRC_PTR); \
 } else { \
@@ -66,7 +66,15 @@ static const char *usage =
 "                   Space is default.\n"
 "\n"
 "EXAMPLE\n"
+"Basic usage:\n"
 "columnizer -d \" \" -r \"\\n\" -c \" \" -- \"a b c\" \"1 2 3\"\n"
+"a 1\n"
+"b 2\n"
+"c 3\n"
+"\n"
+"Using a non-text character for the delimiter:\n"
+"columnizer -d \"$(echo -e '\\x01')\" -- \"$(echo -e 'a\\x01b\\x01c')\" \\\n"
+"    \"$(echo -e '1\\x012\\x013')\"\n"
 "a 1\n"
 "b 2\n"
 "c 3\n"
