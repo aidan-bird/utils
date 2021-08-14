@@ -67,7 +67,7 @@ static const char *usage =
 "\n"
 "EXAMPLE\n"
 "Basic usage:\n"
-"columnizer -d \" \" -r \"\\n\" -c \" \" -- \"a b c\" \"1 2 3\"\n"
+"columnizer -d \" \" -r $'\\n' -c \" \" -- \"a b c\" \"1 2 3\"\n"
 "a 1\n"
 "b 2\n"
 "c 3\n"
@@ -212,9 +212,11 @@ printCol(size_t n, char **strs, char rowSeparator, char colSeparator,
 {
     int j;
     char *buf;
+    char *writter;
     size_t lenSum;
     size_t nCopied;
     size_t lastReadSize;
+    size_t len;
 
     if (!n)
         return 0;
@@ -222,15 +224,18 @@ printCol(size_t n, char **strs, char rowSeparator, char colSeparator,
     buf = malloc(lenSum + 1 + n - 1);
     if (!buf)
         goto error1;
+    writter = buf;
+    len = 0;
     while (1) {
         nCopied = 0;
         j = 0;
         for (int i = 0; i < n; i++) {
             if (j > 0) {
-                buf[nCopied] = colSeparator;
+                writter[nCopied] = colSeparator;
                 nCopied++;
             }
-            lastReadSize = parseRow(buf + nCopied, strs[i], strs + i, delim);
+            lastReadSize = parseRow(writter + nCopied, strs[i], strs + i,
+                delim);
             if (!lastReadSize)
                 continue;
             nCopied += lastReadSize;
@@ -238,10 +243,12 @@ printCol(size_t n, char **strs, char rowSeparator, char colSeparator,
         }
         if (!j)
             break;
-        buf[nCopied] = rowSeparator;
+        writter[nCopied] = rowSeparator;
         nCopied++;
-        fwrite(buf, 1, nCopied, stdout);
+        writter += nCopied;
+        len += nCopied;
     }
+    fwrite(buf, 1, len, stdout);
     free(buf);
     return 0;
 error1:;
